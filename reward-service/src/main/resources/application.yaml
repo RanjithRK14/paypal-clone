@@ -1,0 +1,24 @@
+server:
+  port: 8089
+
+spring:
+  application:
+    name: reward-service
+
+  kafka:
+    bootstrap-servers: localhost:9092
+
+    consumer:
+
+      group-id: reward-group
+
+      auto-offset-reset: earliest
+
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+      value-deserializer: org.apache.kafka.common.serialization.ByteArrayDeserializer
+
+
+    listener:
+
+      missing-topics-fatal: false
