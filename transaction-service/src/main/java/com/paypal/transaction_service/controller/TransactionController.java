@@ -5,7 +5,6 @@ import com.paypal.transaction_service.service.TransactionService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,64 +21,53 @@ public class TransactionController {
     public ResponseEntity<?> create(@Valid @RequestBody Transaction transaction,
                                     HttpServletRequest request) {
 
-        // Read userId from gateway header
+        // Extract userId from gateway
         String userIdHeader = request.getHeader("X-User-Id");
+
         if (userIdHeader == null) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+            return ResponseEntity.status(403)
                     .body("Missing X-User-Id header from gateway");
         }
 
-        Long tokenUserId = Long.parseLong(userIdHeader);
-        Long requestSenderId = transaction.getSenderId();
+        Long userId = Long.parseLong(userIdHeader);
 
-        System.out.println("Gateway userId: " + tokenUserId);
-        System.out.println("Transaction senderId: " + requestSenderId);
+        // Automatically assign senderId from JWT
+        transaction.setSenderId(userId);
 
-        if (!requestSenderId.equals(tokenUserId)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body("User ID mismatch: You are not authorized to create this transaction.");
-        }
+        System.out.println("Sender extracted from JWT: " + userId);
 
         Transaction created = service.createTransaction(transaction);
+
         return ResponseEntity.ok(created);
     }
 
-
-
     @GetMapping("/{id}")
-    public ResponseEntity<?> getById(@PathVariable("id") Long id) {
+    public ResponseEntity<?> getById(@PathVariable Long id) {
+
         Transaction transaction = service.getTransactionById(id);
+
         if (transaction == null) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body("Transaction with id " + id + " not found");
+            return ResponseEntity.status(404)
+                    .body("Transaction not found");
         }
+
         return ResponseEntity.ok(transaction);
     }
 
+    @GetMapping("/my")
+    public ResponseEntity<?> getMyTransactions(HttpServletRequest request) {
 
-    @GetMapping("/user/{userId}")
-    public ResponseEntity<?> getTransactionsByUser(
-            @PathVariable("userId") Long userId,
-            HttpServletRequest request) {
+        String userIdHeader = request.getHeader("X-User-Id");
 
-        // Read JWT userId forwarded by gateway
-        String tokenUserIdHeader = request.getHeader("X-User-Id");
-        if (tokenUserIdHeader == null) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+        if (userIdHeader == null) {
+            return ResponseEntity.status(403)
                     .body("Missing X-User-Id header from gateway");
         }
 
-        Long tokenUserId = Long.parseLong(tokenUserIdHeader);
-
-        // Ensure user can only fetch their own transactions
-        if (!userId.equals(tokenUserId)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body("You are not authorized to view these transactions.");
-        }
+        Long userId = Long.parseLong(userIdHeader);
 
         List<Transaction> transactions = service.getTransactionsByUser(userId);
 
         return ResponseEntity.ok(transactions);
     }
-
 }

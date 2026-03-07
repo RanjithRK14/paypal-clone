@@ -15,6 +15,7 @@ public class JwtUtil {
     }
 
     public static Claims validateToken(String token) {
+        System.out.println("Validating token: " + token);
         return Jwts.parserBuilder()
                 .setSigningKey(getSigningKey())
                 .build()

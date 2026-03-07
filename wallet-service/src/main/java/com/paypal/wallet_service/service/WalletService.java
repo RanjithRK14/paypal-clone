@@ -40,7 +40,8 @@ public class WalletService {
                 ", currency=" + request.getCurrency());
 
         Wallet wallet = walletRepository.findByUserIdAndCurrency(
-                request.getUserId(), "INR"
+                request.getUserId(),
+                request.getCurrency()   // ✅ FIXED
         ).orElseThrow(() ->
                 new NotFoundException("Wallet not found for user: " + request.getUserId())
         );
@@ -50,21 +51,14 @@ public class WalletService {
 
         Wallet saved = walletRepository.save(wallet);
 
-        Long amount = request.getAmount();
-
-        // ✅ FIXED HERE
         transactionRepository.save(
                 Transaction.builder()
                         .walletId(wallet.getId())
                         .type("CREDIT")
-                        .amount(amount)
+                        .amount(request.getAmount())
                         .status("SUCCESS")
                         .build()
         );
-
-        System.out.println("✅ CREDIT done: walletId=" + saved.getId() +
-                ", newBalance=" + saved.getBalance() +
-                ", availableBalance=" + saved.getAvailableBalance());
 
         return new WalletResponse(
                 saved.getId(),
@@ -73,7 +67,6 @@ public class WalletService {
                 saved.getBalance(),
                 saved.getAvailableBalance()
         );
-
     }
 
     @Transactional
@@ -83,17 +76,15 @@ public class WalletService {
                 ", amount=" + request.getAmount() +
                 ", currency=" + request.getCurrency());
 
-        // Find wallet
         Wallet wallet = walletRepository.findByUserIdAndCurrency(
-                request.getUserId(), "INR"
+                request.getUserId(),
+                request.getCurrency()   // ✅ FIXED
         ).orElseThrow(() ->
                 new NotFoundException("Wallet not found for user: " + request.getUserId())
         );
 
-        // Check sufficient balance
         if (wallet.getAvailableBalance() < request.getAmount()) {
 
-            // Save FAILED transaction (optional but production practice)
             transactionRepository.save(
                     Transaction.builder()
                             .walletId(wallet.getId())
@@ -106,13 +97,11 @@ public class WalletService {
             throw new InsufficientFundsException("Not enough balance");
         }
 
-        // Update balances
         wallet.setBalance(wallet.getBalance() - request.getAmount());
         wallet.setAvailableBalance(wallet.getAvailableBalance() - request.getAmount());
 
         Wallet saved = walletRepository.save(wallet);
 
-        // Save SUCCESS transaction
         transactionRepository.save(
                 Transaction.builder()
                         .walletId(wallet.getId())
@@ -122,11 +111,6 @@ public class WalletService {
                         .build()
         );
 
-        System.out.println("✅ DEBIT done: walletId=" + saved.getId() +
-                ", newBalance=" + saved.getBalance() +
-                ", availableBalance=" + saved.getAvailableBalance());
-
-        // Return response
         return new WalletResponse(
                 saved.getId(),
                 saved.getUserId(),
@@ -134,7 +118,6 @@ public class WalletService {
                 saved.getBalance(),
                 saved.getAvailableBalance()
         );
-
     }
 
     public WalletResponse getWallet(Long userId) {
@@ -149,6 +132,9 @@ public class WalletService {
 
     @Transactional
     public HoldResponse placeHold(HoldRequest request) {
+        System.out.println("HOLD request userId=" + request.getUserId());
+        System.out.println("HOLD request currency=" + request.getCurrency());
+        System.out.println("HOLD request amount=" + request.getAmount());
         Wallet wallet = walletRepository.findByUserIdAndCurrency(request.getUserId(), request.getCurrency())
                 .orElseThrow(() -> new NotFoundException("Wallet not found for user: " + request.getUserId()));
 

@@ -15,21 +15,33 @@ import java.util.Optional;
 public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
-
     private final WalletClient walletClient;
 
     @Override
     public User createUser(User user) {
+
         User savedUser = userRepository.save(user);
+
         try {
+
             CreateWalletRequest request = new CreateWalletRequest();
             request.setUserId(savedUser.getId());
             request.setCurrency("INR");
+
             walletClient.createWallet(request);
+
+            System.out.println("💰 Wallet created for user: " + savedUser.getId());
+
         } catch (Exception ex) {
-            userRepository.deleteById(savedUser.getId()); // rollback
-            throw new RuntimeException("Wallet creation failed, user rolled back", ex);
+
+            userRepository.deleteById(savedUser.getId());
+
+            throw new RuntimeException(
+                    "Wallet creation failed, user rolled back",
+                    ex
+            );
         }
+
         return savedUser;
     }
 
