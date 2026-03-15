@@ -5,7 +5,6 @@ spring:
   application:
     name: api-gateway-service
 
-  # ✅ Redis config for rate limiting
   data:
     redis:
       host: localhost
@@ -15,61 +14,49 @@ spring:
 
   cloud:
     gateway:
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOriginPatterns: "*"
+            allowedMethods: [GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD]
+            allowedHeaders: "*"
+            allowCredentials: true
+            maxAge: 3600
+
       default-filters:
         - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
 
       routes:
-
-        # USER SERVICE — public, no rate limit needed
-        - id: user-service
+        - id: user-service-auth
           uri: http://localhost:8081
           predicates:
             - Path=/auth/**
 
-        # WALLET SERVICE — no rate limit (internal calls from transaction-service)
+        - id: user-service-api
+          uri: http://localhost:8081
+          predicates:
+            - Path=/api/users/**
+
         - id: wallet-service
           uri: http://localhost:8083
           predicates:
             - Path=/api/v1/wallets/**
 
-        # TRANSACTION SERVICE — rate limited: 10 req/s per user, burst up to 20
         - id: transaction-service
           uri: http://localhost:8082
           predicates:
-            - Path=/api/transactions/**,/api/transaction/**
-          filters:
-            - name: RequestRateLimiter
-              args:
-                redis-rate-limiter.replenishRate: 10
-                redis-rate-limiter.burstCapacity: 20
-                redis-rate-limiter.requestedTokens: 1
-                key-resolver: "#{@userKeyResolver}"
+            - Path=/api/transactions/**
 
-        # REWARD SERVICE — rate limited: 10 req/s per user, burst up to 20
         - id: reward-service
           uri: http://localhost:8085
           predicates:
             - Path=/api/rewards/**
-          filters:
-            - name: RequestRateLimiter
-              args:
-                redis-rate-limiter.replenishRate: 10
-                redis-rate-limiter.burstCapacity: 20
-                redis-rate-limiter.requestedTokens: 1
-                key-resolver: "#{@userKeyResolver}"
 
-        # NOTIFICATION SERVICE — rate limited: 10 req/s per user, burst up to 20
+        # NOTE: controller is @RequestMapping("/api/notify") — NOT /api/notifications
         - id: notification-service
           uri: http://localhost:8084
           predicates:
-            - Path=/api/notifications/**
-          filters:
-            - name: RequestRateLimiter
-              args:
-                redis-rate-limiter.replenishRate: 10
-                redis-rate-limiter.burstCapacity: 20
-                redis-rate-limiter.requestedTokens: 1
-                key-resolver: "#{@userKeyResolver}"
+            - Path=/api/notify/**
 
 logging:
   level:

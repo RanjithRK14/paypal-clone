@@ -9,9 +9,9 @@ import com.paypal.wallet_service.model.WalletHold;
 import com.paypal.wallet_service.repository.TransactionRepository;
 import com.paypal.wallet_service.repository.WalletHoldRepository;
 import com.paypal.wallet_service.repository.WalletRepository;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -23,30 +23,24 @@ public class WalletService {
 
     @Transactional
     public WalletResponse createWallet(CreateWalletRequest request) {
-        // Idempotent: return existing wallet if one already exists for this userId
         return walletRepository.findByUserId(request.getUserId())
-                .map(existing -> new WalletResponse(
-                        existing.getId(), existing.getUserId(), existing.getCurrency(),
-                        existing.getBalance(), existing.getAvailableBalance()))
+                .map(existing -> toResponse(existing))
                 .orElseGet(() -> {
-                    Wallet wallet = new Wallet(request.getUserId(), request.getCurrency());
-                    Wallet saved = walletRepository.save(wallet);
-                    return new WalletResponse(
-                            saved.getId(), saved.getUserId(), saved.getCurrency(),
-                            saved.getBalance(), saved.getAvailableBalance());
+                    Wallet wallet = new Wallet(request.getUserId(),
+                            request.getCurrency() != null ? request.getCurrency() : "INR");
+                    return toResponse(walletRepository.save(wallet));
                 });
     }
 
     @Transactional
     public WalletResponse credit(CreditRequest request) {
-        System.out.println("💰 CREDIT request received: userId=" + request.getUserId() +
-                ", amount=" + request.getAmount() + ", currency=" + request.getCurrency());
+        System.out.println("💰 CREDIT userId=" + request.getUserId()
+                + " amount=" + request.getAmount() + " currency=" + request.getCurrency());
 
-        Wallet wallet = walletRepository.findByUserIdAndCurrency(
-                request.getUserId(), request.getCurrency()
-        ).orElseThrow(() ->
-                new NotFoundException("Wallet not found for user: " + request.getUserId())
-        );
+        // Find by userId only — each user has exactly one wallet (userId is UNIQUE)
+        Wallet wallet = walletRepository.findByUserId(request.getUserId())
+                .orElseThrow(() ->
+                        new NotFoundException("Wallet not found for user: " + request.getUserId()));
 
         wallet.setBalance(wallet.getBalance() + request.getAmount());
         wallet.setAvailableBalance(wallet.getAvailableBalance() + request.getAmount());
@@ -56,26 +50,27 @@ public class WalletService {
                 .walletId(wallet.getId()).type("CREDIT")
                 .amount(request.getAmount()).status("SUCCESS").build());
 
-        return new WalletResponse(saved.getId(), saved.getUserId(), saved.getCurrency(),
-                saved.getBalance(), saved.getAvailableBalance());
+        System.out.println("✅ CREDIT done — new balance=" + saved.getBalance());
+        return toResponse(saved);
     }
 
     @Transactional
     public WalletResponse debit(DebitRequest request) {
-        System.out.println("💸 DEBIT request received: userId=" + request.getUserId() +
-                ", amount=" + request.getAmount() + ", currency=" + request.getCurrency());
+        System.out.println("💸 DEBIT userId=" + request.getUserId()
+                + " amount=" + request.getAmount() + " currency=" + request.getCurrency());
 
-        Wallet wallet = walletRepository.findByUserIdAndCurrency(
-                request.getUserId(), request.getCurrency()
-        ).orElseThrow(() ->
-                new NotFoundException("Wallet not found for user: " + request.getUserId())
-        );
+        // Find by userId only — each user has exactly one wallet
+        Wallet wallet = walletRepository.findByUserId(request.getUserId())
+                .orElseThrow(() ->
+                        new NotFoundException("Wallet not found for user: " + request.getUserId()));
 
         if (wallet.getAvailableBalance() < request.getAmount()) {
             transactionRepository.save(Transaction.builder()
                     .walletId(wallet.getId()).type("DEBIT")
                     .amount(request.getAmount()).status("FAILED").build());
-            throw new InsufficientFundsException("Not enough balance");
+            throw new InsufficientFundsException("Insufficient balance. " +
+                    "Available: " + wallet.getAvailableBalance() +
+                    ", Requested: " + request.getAmount());
         }
 
         wallet.setBalance(wallet.getBalance() - request.getAmount());
@@ -86,20 +81,19 @@ public class WalletService {
                 .walletId(wallet.getId()).type("DEBIT")
                 .amount(request.getAmount()).status("SUCCESS").build());
 
-        return new WalletResponse(saved.getId(), saved.getUserId(), saved.getCurrency(),
-                saved.getBalance(), saved.getAvailableBalance());
+        System.out.println("✅ DEBIT done — new balance=" + saved.getBalance());
+        return toResponse(saved);
     }
 
     public WalletResponse getWallet(Long userId) {
         Wallet wallet = walletRepository.findByUserId(userId)
                 .orElseThrow(() -> new NotFoundException("Wallet not found for user: " + userId));
-        return new WalletResponse(wallet.getId(), wallet.getUserId(), wallet.getCurrency(),
-                wallet.getBalance(), wallet.getAvailableBalance());
+        return toResponse(wallet);
     }
 
     @Transactional
     public HoldResponse placeHold(HoldRequest request) {
-        Wallet wallet = walletRepository.findByUserIdAndCurrency(request.getUserId(), request.getCurrency())
+        Wallet wallet = walletRepository.findByUserId(request.getUserId())
                 .orElseThrow(() -> new NotFoundException("Wallet not found for user: " + request.getUserId()));
 
         if (wallet.getAvailableBalance() < request.getAmount()) {
@@ -135,8 +129,7 @@ public class WalletService {
         walletRepository.save(wallet);
         walletHoldRepository.save(hold);
 
-        return new WalletResponse(wallet.getId(), wallet.getUserId(),
-                wallet.getCurrency(), wallet.getBalance(), wallet.getAvailableBalance());
+        return toResponse(wallet);
     }
 
     @Transactional
@@ -155,5 +148,12 @@ public class WalletService {
         walletHoldRepository.save(hold);
 
         return new HoldResponse(hold.getHoldReference(), hold.getAmount(), hold.getStatus());
+    }
+
+    // ── helper ──────────────────────────────────────────────────────────────
+
+    private WalletResponse toResponse(Wallet w) {
+        return new WalletResponse(w.getId(), w.getUserId(), w.getCurrency(),
+                w.getBalance(), w.getAvailableBalance());
     }
 }
