@@ -12,7 +12,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class RewardServiceImpl implements RewardService {
 
-    private RewardRepository rewardRepository;
+    private final RewardRepository rewardRepository;
 
     @Override
     public Reward sendReward(Reward reward) {
