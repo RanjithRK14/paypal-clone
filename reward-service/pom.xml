@@ -11,7 +11,7 @@
 	<groupId>com.paypal</groupId>
 	<artifactId>reward-service</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<n>reward-service</n>
+	<name>reward-service</name>
 	<description>PayPal Clone - Reward Service</description>
 
 	<properties>
