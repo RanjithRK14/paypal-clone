@@ -24,7 +24,7 @@ public class CorsConfig {
     @Bean
     public CorsWebFilter corsWebFilter() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(Collections.singletonList("https://novapay-app.netlify.app/"));
+        config.setAllowedOriginPatterns(Collections.singletonList("https://novapay-app.netlify.app"));
         config.setAllowedMethods(Arrays.asList(
                 "GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"));
         config.setAllowedHeaders(Collections.singletonList("*"));
@@ -47,7 +47,7 @@ public class CorsConfig {
         public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
             if (HttpMethod.OPTIONS.equals(exchange.getRequest().getMethod())) {
                 ServerHttpResponse r = exchange.getResponse();
-                r.getHeaders().set(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "https://novapay-app.netlify.app/");
+                r.getHeaders().set(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "https://novapay-app.netlify.app");
                 r.getHeaders().set(HttpHeaders.ACCESS_CONTROL_ALLOW_METHODS,
                         "GET,POST,PUT,DELETE,OPTIONS,PATCH,HEAD");
                 r.getHeaders().set(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS,
