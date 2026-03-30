@@ -17,7 +17,7 @@ spring:
         corsConfigurations:
           '[/**]':
             allowedOriginPatterns:
-              - ${FRONTEND_URL:https://novapay-app.netlify.app/}
+              - ${FRONTEND_URL:https://novapay-app.netlify.app}
             allowedMethods: [GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD]
             allowedHeaders: "*"
             allowCredentials: true
