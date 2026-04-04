@@ -6,7 +6,10 @@ services:
     repo: https://github.com/RanjithRK14/paypal-clone
     rootDir: api-gateway
     dockerfilePath: ./Dockerfile
-    healthCheckPath: /ping/user
+    # /health is answered by the gateway itself (HealthController.java)
+    # It does NOT forward to any backend — answers in <1ms
+    # This prevents the "Timed Out" error that happened with /ping/user
+    healthCheckPath: /health
     envVars:
       - key: SERVER_PORT
         value: 10000
