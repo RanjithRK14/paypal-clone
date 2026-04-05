@@ -1,14 +1,14 @@
 services:
   # ── API Gateway ──────────────────────────────────────────────────────────
+  # ONLY the gateway is kept awake 24/7 (720 hours/month = within free 750h limit)
+  # healthCheckPath: /health → answered by gateway itself (HealthController.java)
+  # This does NOT forward to any backend service → health check always passes
   - type: web
     name: novapay-api-gateway
     runtime: docker
     repo: https://github.com/RanjithRK14/paypal-clone
     rootDir: api-gateway
     dockerfilePath: ./Dockerfile
-    # /health is answered by the gateway itself (HealthController.java)
-    # It does NOT forward to any backend — answers in <1ms
-    # This prevents the "Timed Out" error that happened with /ping/user
     healthCheckPath: /health
     envVars:
       - key: SERVER_PORT
@@ -26,14 +26,17 @@ services:
       - key: FRONTEND_URL
         value: https://novapay-app.netlify.app
 
-  # ── User Service ─────────────────────────────────────────────────────────
+  # ── Backend Services (sleep when idle to save Render free hours) ──────────
+  # These DO NOT have healthCheckPath — Render lets them sleep.
+  # They wake up on first request (gateway has 200s timeout to handle cold start).
+  # App.jsx shows "Server is waking up..." UI during the 2-minute cold start.
+
   - type: web
     name: novapay-user-service
     runtime: docker
     repo: https://github.com/RanjithRK14/paypal-clone
     rootDir: user-service
     dockerfilePath: ./Dockerfile
-    healthCheckPath: /ping
     envVars:
       - key: SERVER_PORT
         value: 10000
@@ -48,14 +51,12 @@ services:
       - key: WALLET_SERVICE_URL
         value: https://novapay-wallet-service.onrender.com
 
-  # ── Wallet Service ───────────────────────────────────────────────────────
   - type: web
     name: novapay-wallet-service
     runtime: docker
     repo: https://github.com/RanjithRK14/paypal-clone
     rootDir: wallet-service
     dockerfilePath: ./Dockerfile
-    healthCheckPath: /ping
     envVars:
       - key: SERVER_PORT
         value: 10000
@@ -66,14 +67,12 @@ services:
       - key: SPRING_DATASOURCE_PASSWORD
         value: npg_gVO2FRGBYQ1h
 
-  # ── Transaction Service ──────────────────────────────────────────────────
   - type: web
     name: novapay-transaction-service
     runtime: docker
     repo: https://github.com/RanjithRK14/paypal-clone
     rootDir: transaction-service
     dockerfilePath: ./Dockerfile
-    healthCheckPath: /ping
     envVars:
       - key: SERVER_PORT
         value: 10000
@@ -86,14 +85,12 @@ services:
       - key: WALLET_SERVICE_URL
         value: https://novapay-wallet-service.onrender.com
 
-  # ── Reward Service ───────────────────────────────────────────────────────
   - type: web
     name: novapay-reward-service
     runtime: docker
     repo: https://github.com/RanjithRK14/paypal-clone
     rootDir: reward-service
     dockerfilePath: ./Dockerfile
-    healthCheckPath: /ping
     envVars:
       - key: SERVER_PORT
         value: 10000
@@ -104,14 +101,12 @@ services:
       - key: SPRING_DATASOURCE_PASSWORD
         value: npg_gVO2FRGBYQ1h
 
-  # ── Notification Service ─────────────────────────────────────────────────
   - type: web
     name: novapay-notification-service
     runtime: docker
     repo: https://github.com/RanjithRK14/paypal-clone
     rootDir: notification-service
     dockerfilePath: ./Dockerfile
-    healthCheckPath: /ping
     envVars:
       - key: SERVER_PORT
         value: 10000

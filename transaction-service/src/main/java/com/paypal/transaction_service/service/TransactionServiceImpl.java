@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
@@ -55,7 +56,7 @@ public class TransactionServiceImpl implements TransactionService {
         boolean captured = false;
 
         try {
-            // Step 1: HOLD sender amount (amount as integer, no decimals)
+            // Step 1: HOLD sender amount
             String holdJson = String.format(
                     "{\"userId\": %d, \"currency\": \"INR\", \"amount\": %d}",
                     senderId, amount);
@@ -63,7 +64,13 @@ public class TransactionServiceImpl implements TransactionService {
             ResponseEntity<String> holdResp = restTemplate.postForEntity(
                     getWalletUrl() + "/hold", new HttpEntity<>(holdJson, headers), String.class);
 
+            // Null-safe holdReference extraction — prevents NullPointerException
             JsonNode holdNode = objectMapper.readTree(holdResp.getBody());
+            if (holdNode == null || !holdNode.has("holdReference") || holdNode.get("holdReference").isNull()) {
+                System.err.println("❌ Hold response missing holdReference field: " + holdResp.getBody());
+                saved.setStatus("FAILED");
+                return repository.save(saved);
+            }
             holdReference = holdNode.get("holdReference").asText();
             System.out.println("🛑 Hold placed: " + holdReference);
 
@@ -107,13 +114,16 @@ public class TransactionServiceImpl implements TransactionService {
                 System.out.println("💰 Receiver credited");
 
             } catch (Exception ex) {
-                // Credit failed — refund sender
                 System.out.println("❌ Credit failed → refunding sender");
                 String refundJson = String.format(
                         "{\"userId\": %d, \"currency\": \"INR\", \"amount\": %d}",
                         senderId, amount);
-                restTemplate.postForEntity(
-                        getWalletUrl() + "/credit", new HttpEntity<>(refundJson, headers), String.class);
+                try {
+                    restTemplate.postForEntity(
+                            getWalletUrl() + "/credit", new HttpEntity<>(refundJson, headers), String.class);
+                } catch (Exception refundEx) {
+                    System.err.println("⚠️ Refund also failed: " + refundEx.getMessage());
+                }
                 saved.setStatus("FAILED");
                 return repository.save(saved);
             }
@@ -121,8 +131,17 @@ public class TransactionServiceImpl implements TransactionService {
             saved.setStatus("SUCCESS");
             saved = repository.save(saved);
 
+        } catch (ResourceAccessException ex) {
+            // Timeout or connection refused — wallet-service sleeping or unreachable
+            System.err.println("❌ Wallet service unreachable (timeout/connection refused): " + ex.getMessage());
+            if (holdReference != null && !captured) {
+                tryReleaseHold(holdReference, headers);
+            }
+            saved.setStatus("FAILED");
+            saved = repository.save(saved);
+
         } catch (HttpClientErrorException ex) {
-            System.out.println("❌ Wallet HTTP error: " + ex.getStatusCode()
+            System.err.println("❌ Wallet HTTP error: " + ex.getStatusCode()
                     + " — " + ex.getResponseBodyAsString());
             if (holdReference != null && !captured) {
                 tryReleaseHold(holdReference, headers);
@@ -131,7 +150,8 @@ public class TransactionServiceImpl implements TransactionService {
             saved = repository.save(saved);
 
         } catch (Exception ex) {
-            System.out.println("❌ Unexpected error: " + ex.getMessage());
+            System.err.println("❌ Unexpected error in createTransaction: " + ex.getMessage());
+            ex.printStackTrace();
             if (holdReference != null && !captured) {
                 tryReleaseHold(holdReference, headers);
             }
@@ -156,7 +176,7 @@ public class TransactionServiceImpl implements TransactionService {
                     new HttpEntity<>(headers), String.class);
             System.out.println("🔓 Hold released: " + holdReference);
         } catch (Exception e) {
-            System.out.println("⚠️ Failed to release hold: " + e.getMessage());
+            System.err.println("⚠️ Failed to release hold: " + e.getMessage());
         }
     }
 
